@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "sourceWorkbook": "内置示例目录（首次启动自动复制到数据目录，可在看板「模型」里增删改）",
+  "sourceMtime": null,
+  "sheetOrder": ["DeepSeek 官方"],
+  "statusRules": {
+    "": ["include", "在用"]
+  },
+  "entries": [
+    {
+      "id": "DeepSeek 官方|deepseek-chat|https://api.deepseek.com/chat/completions",
+      "sheet": "DeepSeek 官方",
+      "sourceRow": 2,
+      "service": "DeepSeek",
+      "name": "deepseek-chat",
+      "exampleModel": "deepseek-chat",
+      "modelMismatch": false,
+      "kind": "chat",
+      "status": "",
+      "include": "include",
+      "includeReason": "在用",
+      "contextLength": "128k",
+      "url": "https://api.deepseek.com/chat/completions",
+      "requestExample": "{\"model\":\"deepseek-chat\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}"
+    },
+    {
+      "id": "DeepSeek 官方|deepseek-reasoner|https://api.deepseek.com/chat/completions",
+      "sheet": "DeepSeek 官方",
+      "sourceRow": 3,
+      "service": "DeepSeek",
+      "name": "deepseek-reasoner",
+      "exampleModel": "deepseek-reasoner",
+      "modelMismatch": false,
+      "kind": "chat",
+      "status": "",
+      "include": "include",
+      "includeReason": "在用",
+      "contextLength": "128k",
+      "url": "https://api.deepseek.com/chat/completions",
+      "requestExample": "{\"model\":\"deepseek-reasoner\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}"
+    }
+  ]
+}

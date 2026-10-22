@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>大模型接口巡检</title>
+<style>
+:root{
+  /* ── 令牌桥 ─────────────────────────────────────────────────────────────
+     插件在 iframe 内把 DSH 主题令牌映射成下面这组 --p-*；
+     独立浏览器打开时用右侧默认值，外观与旧版完全一致（回归要求）。       */
+  --p-bg-base:#0b1120;      --p-bg-card:#111827;   --p-bg-card2:#0f172a;
+  --p-border:#1f2937;       --p-border-strong:#1e3a8a;
+  --p-fg:#d1d5db;           --p-fg-muted:#6b7280;  --p-on-accent:#fff;
+  --p-accent:#3b82f6;       --p-accent-2:#8b5cf6;  --p-danger-fill:#dc2626;
+  --p-font-family:"Segoe UI",system-ui,sans-serif;  --p-font-size:13px;
+  --p-hover:rgba(255,255,255,.04); --p-hover-strong:rgba(255,255,255,.025);
+  --p-mask:rgba(3,7,18,.6);        --p-shadow:rgba(0,0,0,.4);
+  --p-radius:8px;           --p-card-filter:none;
+
+  /* ── 旧变量名（保持不变，只改为引用 --p-*） ── */
+  --bg:var(--p-bg-base); --panel:var(--p-bg-card); --panel2:var(--p-bg-card2); --line:var(--p-border);
+  --txt:var(--p-fg); --dim:var(--p-fg-muted); --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --primary:var(--p-accent); --accent:var(--p-accent-2); --chat:var(--p-accent);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font:var(--p-font-size)/1.5 var(--p-font-family);display:flex;min-height:100vh}
+
+/* ── Sidebar ── */
+#sidebar{width:190px;min-width:190px;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+#sidebar .brand{font-size:14px;font-weight:600;color:var(--primary);padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+#sidebar .brand small{display:block;font-size:11px;color:var(--dim);font-weight:400;margin-top:2px}
+#sidebar nav{flex:1;padding:10px 0}
+#sidebar nav button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  padding:11px 18px;border:0;background:none;color:var(--dim);cursor:pointer;font-size:13px;
+  border-left:3px solid transparent;transition:.15s}
+#sidebar nav button:hover{background:var(--p-hover);color:var(--txt)}
+#sidebar nav button.active{color:var(--primary);border-left-color:var(--primary);background:rgba(59,130,246,.1)}
+#sidebar .foot{padding:12px 18px;font-size:11px;color:var(--dim);border-top:1px solid var(--line);line-height:1.6}
+
+/* ── Content ── */
+#content{flex:1;overflow-y:auto;height:100vh}
+.page{display:none;padding:22px 30px 48px}
+.page.active{display:block}
+.page h2{font-size:15px;font-weight:600;margin:0 0 14px}
+.page h2:not(:first-child){margin-top:26px}
+
+/* ── Cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card .label{font-size:12px;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.card .val{font-size:26px;font-weight:700;line-height:1.2}
+.card .sub{font-size:12px;color:var(--dim);margin-top:6px}
+.val.ok{color:var(--ok)} .val.bad{color:var(--bad)} .val.warn{color:var(--warn)}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--panel2);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--dim);font-weight:500;font-size:11px;background:var(--panel)}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:var(--p-hover-strong)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.unk{background:var(--warn)}
+.badge{display:inline-block;padding:1px 7px;border-radius:5px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+.badge.chat{color:var(--chat);border-color:var(--p-border-strong)}
+.num{font-variant-numeric:tabular-nums}
+.dim{color:var(--dim)}
+.err{color:var(--bad);white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;max-width:520px;vertical-align:top}
+.sec{font-size:12px;color:var(--dim);margin:16px 0 8px}
+.stale{color:var(--warn)}
+.empty{color:var(--dim);padding:14px;text-align:center;background:var(--panel2);border-radius:8px}
+
+/* ── Forms / buttons ── */
+.btn{background:var(--primary);color:var(--p-on-accent);border:0;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:12px;transition:.15s}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line)}
+.btn.danger{background:var(--p-danger-fill)}
+.btn.sm{padding:3px 10px;font-size:11px}
+.form-row{display:flex;gap:12px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:11px;color:var(--dim)}
+.fg input,.fg select,.fg textarea{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+  padding:7px 10px;border-radius:6px;font-size:12px;font-family:inherit}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--primary)}
+.fg textarea{min-width:340px;resize:vertical}
+.topbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+.card-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.hint{font-size:11px;color:var(--dim);margin-top:4px}
+input[type=checkbox]{transform:scale(1.15);cursor:pointer;accent-color:var(--primary)}
+.custom-tag{color:var(--accent);font-size:11px}
+
+/* ── Toast ── */
+#toast{position:fixed;right:20px;bottom:20px;background:var(--panel);border:1px solid var(--line);
+  padding:11px 18px;border-radius:9px;display:none;z-index:50;box-shadow:0 8px 24px var(--p-shadow);max-width:420px}
+#toast.show{display:block}
+
+/* ── Modal ── */
+#modal{position:fixed;inset:0;background:var(--p-mask);display:none;align-items:center;justify-content:center;z-index:40}
+#modal.show{display:flex}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;width:640px;max-width:92vw;max-height:88vh;overflow:auto}
+#modal h3{margin:0 0 4px;font-size:14px}
+#modal .form-row{margin-bottom:0}
+#modal .fg textarea{min-width:0;width:100%}
+#modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="brand">🔍 大模型巡检<small>接口可用性看板</small></div>
+  <nav>
+    <button data-page="home" class="active" onclick="showPage('home',this)">📊 首页</button>
+    <button data-page="detail" onclick="showPage('detail',this)">📋 详情页</button>
+    <button data-page="config" onclick="showPage('config',this)">⚙️ 配置</button>
+  </nav>
+  <div class="foot">
+    <div id="foot-gen">—</div>
+    <div id="foot-round">—</div>
+  </div>
+</div>
+
+<div id="content">
+  <!-- ══════════ 首页 ══════════ -->
+  <div class="page active" id="pg-home">
+    <div class="topbar">
+      <button class="btn" id="btn-runnow" onclick="runNow()">⚡ 立即测试</button>
+      <span class="hint" id="run-now-hint">手动触发一轮巡检，不影响计划任务。</span>
+    </div>
+
+    <h2>机房概览 · 本轮可用情况</h2>
+    <div class="cards" id="home-cards"><div class="empty">加载中…</div></div>
+
+    <h2>今日巡检</h2>
+    <div class="cards" id="home-stats"><div class="empty">加载中…</div></div>
+
+    <h2>不可用模型</h2>
+    <div id="home-fail"><div class="empty">加载中…</div></div>
+  </div>
+
+  <!-- ══════════ 详情页 ══════════ -->
+  <div class="page" id="pg-detail">
+    <h2>全部模型详情</h2>
+    <div id="detail-kpi" class="sec"></div>
+    <div id="detail-rows"><div class="empty">加载中…</div></div>
+  </div>
+
+  <!-- ══════════ 配置页 ══════════ -->
+  <div class="page" id="pg-config">
+    <h2>巡检模型维护</h2>
+    <div class="card-box">
+      <div class="sec" style="margin-top:0">勾选 = 纳入巡检（勾选/取消会**立即保存**，下一轮巡检生效）。<span class="custom-tag">★</span> 为手动添加的模型。已下线/已迁移/迁到K100 的模型已从清单移除，不再显示。</div>
+    </div>
+
+    <div class="card-box">
+      <div class="sec" style="margin-top:0">API Key 管理</div>
+      <div class="hint" style="margin-bottom:8px">按子表配置默认 Key；手动模型还可以单独指定 Key（见下方添加/编辑）。留空清除该子表的 Key。</div>
+      <div id="keys-editor" class="form-row"><div class="empty">加载中…</div></div>
+      <div class="topbar" style="margin-bottom:0">
+        <button class="btn" onclick="keysSave()">保存 API Key</button>
+        <span class="hint" id="keys-hint"></span>
+      </div>
+    </div>
+
+    <div class="card-box">
+      <div class="sec" style="margin-top:0">添加巡检模型</div>
+      <div class="form-row">
+        <div class="fg"><label>所属机房/子表</label>
+          <select id="add-sheet">
+            <option value="电信机房部署">电信机房部署</option>
+            <option value="电信新环境">电信新环境</option>
+            <option value="裸机部署">裸机部署</option>
+            <option value="移动机房部署">移动机房部署</option>
+          </select>
+        </div>
+        <div class="fg"><label>服务名称</label><input id="add-service" placeholder="如 DeepSeek-V4-Flash（留空同模型名称）" style="width:200px"></div>
+        <div class="fg"><label>模型名称</label><input id="add-name" placeholder="接口请求里的 model，如 deepseek-v4-flash" style="width:240px"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>请求地址 URL</label><input id="add-url" placeholder="http://172.26.x.x:port/v1/chat/completions" style="width:320px"></div>
+        <div class="fg"><label>类型</label>
+          <select id="add-kind">
+            <option value="chat">chat</option>
+            <option value="embeddings">embeddings</option>
+            <option value="rerank">rerank</option>
+            <option value="custom">custom</option>
+          </select>
+        </div>
+        <div class="fg"><label>API Key（可选，留空用所属子表 Key）</label>
+          <input id="add-apikey" placeholder="sk-xxx" style="width:220px">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>请求示例 JSON（chat 可留空，其它类型请按接口示例填写）</label>
+          <textarea id="add-ex" rows="6" style="width:560px;min-height:140px;font-family:Consolas,monospace;font-size:12px" placeholder='{"messages":[{"role":"user","content":"hello"}]}'></textarea>
+        </div>
+        <button class="btn" onclick="cfgAddModel()">＋ 添加</button>
+      </div>
+      <div class="hint">添加后会立即出现在下方列表中，并默认纳入巡检；下轮巡检开始探测该地址。</div>
+    </div>
+
+    <div class="card-box">
+      <div class="sec" style="margin-top:0">巡检设置</div>
+      <div class="form-row">
+        <div class="fg"><label>巡检间隔（分钟）</label><input id="cfg-interval" type="number" min="1" max="1440" value="10" style="width:90px"></div>
+        <button class="btn" onclick="cfgSaveInterval()">保存间隔</button>
+        <span class="hint" id="interval-hint">默认 10 分钟。保存后会自动同步到 Windows 计划任务「DSH模型巡检」。</span>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <div class="fg"><label>模型超时时间（毫秒）</label><input id="cfg-timeout" type="number" min="1000" max="300000" step="1000" value="15000" style="width:120px"></div>
+        <button class="btn" onclick="cfgSaveTimeout()">保存超时</button>
+        <span class="hint" id="timeout-hint">单次请求最长等待时间，默认 15000 毫秒（15 秒），下一轮巡检生效。</span>
+      </div>
+    </div>
+
+    <div class="card-box">
+      <div class="sec" style="margin-top:0">邮件告警</div>
+      <div class="form-row">
+        <div class="fg"><label style="display:flex;align-items:center;gap:6px"><input id="alert-enable" type="checkbox"> 启用邮件告警</label></div>
+        <span class="hint" style="margin-left:4px">关闭后不会发送任何告警/恢复邮件</span>
+      </div>
+
+      <div class="sec">SMTP 发件配置</div>
+      <div class="form-row">
+        <div class="fg"><label>SMTP 服务器</label><input id="alert-host" placeholder="smtp.qq.com" style="width:200px"></div>
+        <div class="fg"><label>端口</label><input id="alert-port" type="number" min="1" max="65535" value="465" style="width:100px"></div>
+        <div class="fg"><label style="display:flex;align-items:center;gap:6px"><input id="alert-secure" type="checkbox" checked> SSL/TLS 加密</label></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>发件人邮箱账号</label><input id="alert-user" placeholder="xxx@qq.com" style="width:220px"></div>
+        <div class="fg"><label>邮箱授权码</label><input id="alert-pass" type="password" placeholder="非登录密码" style="width:200px"></div>
+      </div>
+
+      <div class="sec">告警接收</div>
+      <div class="form-row">
+        <div class="fg" style="flex:1"><label>收件人邮箱（多个用英文逗号分隔）</label>
+          <textarea id="alert-receivers" rows="2" placeholder="a@example.com,b@example.com" style="width:100%"></textarea>
+        </div>
+      </div>
+
+      <div class="sec">告警阈值</div>
+      <div class="form-row">
+        <div class="fg"><label>连续失败 N 次触发告警</label><input id="alert-fail" type="number" min="1" max="100" value="3" style="width:90px"></div>
+        <div class="fg"><label>连续成功 N 次判定恢复</label><input id="alert-recover" type="number" min="1" max="100" value="3" style="width:90px"></div>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <button class="btn" onclick="alertSave()">保存邮件配置</button>
+        <button class="btn ghost" onclick="alertTest()">发送测试邮件</button>
+        <span class="hint" id="alert-hint">修改后请点「保存邮件配置」；「发送测试邮件」使用当前表单内容，不要求先保存。</span>
+      </div>
+    </div>
+
+    <h2>模型清单</h2>
+    <div id="cfg-rows"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<div id="modal">
+  <div class="box">
+    <h3>编辑模型</h3>
+    <div class="hint" id="edit-id-hint" style="margin-bottom:12px"></div>
+    <div class="form-row">
+      <div class="fg"><label>服务名称</label><input id="ed-service" style="width:200px"></div>
+      <div class="fg"><label>模型名称</label><input id="ed-name" style="width:240px"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>请求地址 URL</label><input id="ed-url" style="width:400px"></div>
+      <div class="fg"><label>类型</label>
+        <select id="ed-kind">
+          <option value="chat">chat</option>
+          <option value="embeddings">embeddings</option>
+          <option value="rerank">rerank</option>
+          <option value="custom">custom</option>
+        </select>
+      </div>
+      <div class="fg"><label>请求类型</label>
+        <select id="ed-reqtype" onchange="edToggleReqType()">
+          <option value="json">JSON（默认）</option>
+          <option value="multipart">表单上传（multipart）</option>
+          <option value="raw">原始文本（原样发送）</option>
+        </select>
+      </div>
+    </div>
+    <div id="ed-multipart" style="display:none">
+      <div class="form-row">
+        <div class="fg"><label>文件字段名</label><input id="ed-filefield" value="file" style="width:120px"></div>
+        <div class="fg"><label>上传音频/文件</label><input type="file" id="ed-file" onchange="edUpload(this)"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>或巡检机上的文件路径</label><input id="ed-filepath" placeholder="D:\path\to\test.wav" style="width:340px"></div>
+        <span class="hint" id="ed-filehint"></span>
+      </div>
+      <div class="hint">上传会保存到工具目录的 media/ 下；若同时上传了文件，优先使用上传的文件。</div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="width:70%"><label>请求示例 JSON</label>
+        <textarea id="ed-ex" rows="6" style="width:100%;min-height:140px;font-family:Consolas,monospace;font-size:12px" placeholder='{"messages":[{"role":"user","content":"hello"}]}'></textarea>
+      </div>
+    </div>
+    <div class="form-row" style="align-items:center">
+      <div class="fg"><label>API Key（留空用所属子表 Key）</label>
+        <input id="ed-apikey" placeholder="sk-xxx" style="width:260px">
+      </div>
+      <div class="fg"><label>纳入巡检</label><input id="ed-inc" type="checkbox" checked></div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" onclick="editClose()">取消</button>
+      <button class="btn" onclick="editSave()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ══════════ 工具函数 ══════════ */
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function fmt(v,u){return v==null?'<span class="dim">—</span>':`<span class="num">${v}</span>`+(u?` <span class="dim">${u}</span>`:'');}
+function dot(ok){return `<span class="dot ${ok===true?'ok':ok===false?'bad':'unk'}"></span>`;}
+function fmtAge(min){return min==null?'—':(min<1?'刚刚':min<60?min+' 分钟前':(Math.floor(min/60)+' 小时前'));}
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pg-'+id).classList.add('active');
+  document.querySelectorAll('#sidebar nav button').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(id==='home')tickHome();
+  if(id==='detail')tickDetail();
+  if(id==='config')cfgLoad();
+}
+function toast(m,ms){
+  const t=document.getElementById('toast');
+  t.textContent=m;t.classList.add('show');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms||4000);
+}
+
+/* ══════════ 首页 ══════════ */
+async function tickHome(){
+  let st;
+  try{ st=await (await fetch('/api/stats',{cache:'no-store'})).json(); }
+  catch(e){ document.getElementById('home-cards').innerHTML=`<div class="empty">读取失败: ${esc(e)}</div>`; return; }
+
+  // 机房概览卡片
+  const sheets=Object.entries(st.sheetStats||{});
+  if(!sheets.length){
+    document.getElementById('home-cards').innerHTML='<div class="empty">尚无巡检数据，等待首轮探针完成…</div>';
+  }else{
+    document.getElementById('home-cards').innerHTML=sheets.map(([sh,d])=>{
+      const p=d.availability!=null?Math.round(d.availability*100):0;
+      const cls=p>=90?'ok':p>=50?'warn':'bad';
+      return `<div class="card">
+        <div class="label">${esc(sh)}</div>
+        <div class="val ${cls}">${p}%</div>
+        <div class="sub">${d.ok}/${d.total} 正常 · 共 ${d.total} 条</div>
+      </div>`;
+    }).join('');
+  }
+
+  // 今日统计
+  const sum=st.summary||{};
+  const allOk=(sum.total!=null && sum.ok===sum.total);
+  const catAge=st.catalogAge;
+  document.getElementById('home-stats').innerHTML=
+    `<div class="card">
+       <div class="label">今日巡检轮次</div>
+       <div class="val num">${st.roundsToday||0}</div>
+       <div class="sub">每轮 ${st.totalEntries||sum.total||0} 条</div>
+     </div>
+     <div class="card">
+       <div class="label">本轮结果</div>
+       <div class="val ${allOk?'ok':'warn'}">${sum.ok||0} / ${sum.total||0}</div>
+       <div class="sub">耗时 ${sum.durationMs||0} ms</div>
+     </div>
+     <div class="card">
+       <div class="label">最近一轮</div>
+       <div class="val num" style="font-size:16px">${sum.finishedAt?new Date(sum.finishedAt).toLocaleTimeString('zh-CN',{hour12:false}):'—'}</div>
+       <div class="sub">${st.roundAgeMin!=null?fmtAge(st.roundAgeMin):'尚无数据'}</div>
+     </div>
+     <div class="card">
+       <div class="label">清单更新</div>
+       <div class="val num">${catAge!=null?catAge:'?'}<span style="font-size:13px;color:var(--dim);font-weight:400"> 天前</span></div>
+       <div class="sub">${catAge!=null&&catAge>7?'<span class="stale">超过 7 天，建议重新导入</span>':'清单较新'}</div>
+     </div>`;
+
+  // 不可用模型
+  const bad=st.unavailable||[];
+  if(!bad.length){
+    document.getElementById('home-fail').innerHTML='<div class="empty">✓ 本轮无不可用模型</div>';
+  }else{
+    document.getElementById('home-fail').innerHTML=
+      `<div class="sec">共 ${bad.length} 条不可用</div>
+       <table><thead><tr>
+         <th>状态</th><th>机房</th><th>服务名称</th><th>类型</th><th>延迟</th><th>错误</th>
+       </tr></thead><tbody>${bad.map(e=>`<tr>
+         <td>${dot(false)}</td><td>${esc(e.sheet)}</td><td>${esc(e.service||e.name)}</td>
+         <td><span class="badge">${esc(e.kind)}</span></td>
+         <td>${fmt(e.latencyMs,'ms')}</td>
+         <td class="err" title="${esc(e.error||'')}">${esc(e.error||'')}</td>
+       </tr>`).join('')}</tbody></table>`;
+  }
+}
+
+/* ══════════ 详情页 ══════════ */
+async function tickDetail(){
+  let s;
+  try{ s=await (await fetch('/api/status',{cache:'no-store'})).json(); }
+  catch(e){ document.getElementById('detail-kpi').textContent='读取失败: '+e; return; }
+  if(!s||!s.entries||!s.entries.length){
+    document.getElementById('detail-kpi').textContent='尚无巡检数据';
+    document.getElementById('detail-rows').innerHTML='<div class="empty">等待首轮探针完成…</div>';
+    return;
+  }
+  const sum=s.summary||{};
+  const ageMin=s.generatedAt?Math.floor((Date.now()-Date.parse(s.generatedAt))/60000):null;
+  document.getElementById('detail-kpi').innerHTML=
+    `本轮 <b>${sum.ok||0}/${sum.total||0}</b> 正常 · 耗时 <b>${sum.durationMs||0}ms</b> · 状态更新 <b>${fmtAge(ageMin)}</b>`;
+
+  const groups={};
+  for(const e of s.entries)(groups[e.sheet]=groups[e.sheet]||[]).push(e);
+
+  let html='';
+  for(const sheet of Object.keys(groups)){
+    const rows=groups[sheet];
+    const okN=rows.filter(r=>r.ok).length;
+    html+=`<div class="sec">${esc(sheet)} — ${okN}/${rows.length} 正常</div>`;
+    html+=`<table><thead><tr>
+      <th>状态</th><th>服务名</th><th>模型名称</th><th>类型</th>
+      <th>延迟 ms</th><th>TTFT ms</th><th>TPOT ms/tok</th><th>TPS tok/s</th>
+      <th>可用率</th><th>最近错误</th>
+    </tr></thead><tbody>`;
+    rows.sort((a,b)=>(a.ok===b.ok?0:a.ok?1:-1)||String(a.name).localeCompare(String(b.name)));
+    for(const r of rows){
+      const isChat=r.kind==='chat';
+      html+=`<tr>
+        <td>${dot(r.ok)}</td>
+        <td>${esc(r.service||r.name)}</td>
+        <td class="dim">${esc(r.name||'')}</td>
+        <td><span class="badge${isChat?' chat':''}">${esc(r.kind)}</span></td>
+        <td>${fmt(r.latencyMs)}</td>
+        <td>${isChat?fmt(r.ttftMs):'<span class="dim">—</span>'}</td>
+        <td>${isChat?fmt(r.tpotMs):'<span class="dim">—</span>'}</td>
+        <td>${isChat?fmt(r.tps):'<span class="dim">—</span>'}</td>
+        <td>${fmt(r.availability!=null?Math.round(r.availability*100):null,'%')}</td>
+        <td class="err" title="${esc(r.ok?'':r.error||'')}">${r.ok?'':esc(r.error||'')}</td>
+      </tr>`;
+    }
+    html+='</tbody></table>';
+  }
+  document.getElementById('detail-rows').innerHTML=html;
+}
+
+/* ══════════ 配置页 ══════════ */
+let CFG=null;
+
+async function cfgLoad(){
+  try{ CFG=await (await fetch('/api/catalog',{cache:'no-store'})).json(); }
+  catch(e){ document.getElementById('cfg-rows').innerHTML=`<div class="empty">读取失败: ${esc(e)}</div>`; return; }
+  cfgRender();
+  const iv=(CFG.settings&&CFG.settings.probeInterval)||10;
+  document.getElementById('cfg-interval').value=iv;
+  const to=(CFG.settings&&CFG.settings.timeoutMs)||15000;
+  document.getElementById('cfg-timeout').value=to;
+  alertLoad();
+  keysReload();
+}
+
+function cfgRender(){
+  const rows=CFG.entries||[];
+  if(!rows.length){ document.getElementById('cfg-rows').innerHTML='<div class="empty">清单为空</div>'; return; }
+
+  const groups={};
+  for(const e of rows)(groups[e.sheet]=groups[e.sheet]||[]).push(e);
+
+  let html='';
+  for(const sheet of Object.keys(groups)){
+    const g=groups[sheet];
+    const incN=g.filter(e=>e.effectiveInclude).length;
+    html+=`<div class="sec">${esc(sheet)} — ${incN}/${g.length} 条纳入</div>`;
+    html+=`<table><thead><tr>
+      <th>巡检</th><th>服务名</th><th>模型名称</th><th>类型</th><th>操作</th>
+    </tr></thead><tbody>`;
+    for(const e of g){
+      const mark = e._edited
+        ? ' <span class="custom-tag" title="已编辑（覆盖清单字段）">✎</span>'
+        : (e.overridden ? ' <span class="custom-tag" title="已手动纳入/排除">●</span>' : '');
+      const op = `<button class="btn sm" data-act="edit" data-id="${esc(e.id)}">编辑</button> <button class="btn danger sm" data-act="del" data-id="${esc(e.id)}">删除</button>`;
+      html+=`<tr>
+        <td><input type="checkbox" class="inc" data-id="${esc(e.id)}" ${e.effectiveInclude?'checked':''} onchange="cfgToggle()"></td>
+        <td>${esc(e.service||e.name)}${mark}</td>
+        <td class="dim">${esc(e.name||'')}</td>
+        <td><span class="badge">${esc(e.kind)}</span></td>
+        <td>${op}</td>
+      </tr>`;
+    }
+    html+='</tbody></table>';
+  }
+  const box=document.getElementById('cfg-rows');
+  box.innerHTML=html;
+  // 事件委托（只绑定一次）：编辑 / 删除
+  if(!box._bound){
+    box._bound=true;
+    box.addEventListener('click',(ev)=>{
+      const btn=ev.target.closest('button[data-act]');
+      if(!btn)return;
+      const id=btn.dataset.id;
+      if(btn.dataset.act==='edit') editOpen(id);
+      else if(btn.dataset.act==='del') cfgDelete(id);
+    });
+  }
+}
+
+function cfgCollectOverrides(){
+  const ov={};
+  for(const e of (CFG.entries||[])){
+    const cb=document.querySelector(`input.inc[data-id="${CSS.escape(e.id)}"]`);
+    if(!cb)continue;
+    const inc=cb.checked;
+    if(e.defaultInclude!==inc) ov[e.id]=inc?'include':'exclude';
+  }
+  return ov;
+}
+
+// 勾选/取消后自动保存（防抖 250ms），无需再点“保存”
+let CFG_SAVE_TIMER=null;
+function cfgToggle(){
+  if(CFG_SAVE_TIMER) clearTimeout(CFG_SAVE_TIMER);
+  CFG_SAVE_TIMER=setTimeout(async ()=>{
+    CFG_SAVE_TIMER=null;
+    const ov=cfgCollectOverrides();
+    try{
+      const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({overrides:ov})});
+      const j=await r.json();
+      if(j.ok){ CFG.overrides=ov; toast('勾选已保存，下一轮巡检生效'); }
+      else toast('保存失败: '+(j.error||'未知错误'));
+    }catch(e){ toast('请求失败: '+e); }
+  },250);
+}
+
+async function cfgAddModel(){
+  const sheet=document.getElementById('add-sheet').value;
+  const service=document.getElementById('add-service').value.trim();
+  const name=document.getElementById('add-name').value.trim();
+  const url=document.getElementById('add-url').value.trim();
+  const kind=document.getElementById('add-kind').value;
+  const ex=document.getElementById('add-ex').value.trim();
+  const apiKey=document.getElementById('add-apikey').value.trim();
+  if(!name||!url){ toast('模型名称和 URL 为必填'); return; }
+  if(!/^https?:\/\//i.test(url)){ toast('URL 需以 http:// 或 https:// 开头'); return; }
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({addModel:{sheet,service,name,url,kind,requestExample:ex,apiKey}})});
+    const j=await r.json();
+    if(j.ok){
+      toast('已添加: '+name);
+      document.getElementById('add-service').value='';
+      document.getElementById('add-name').value='';
+      document.getElementById('add-url').value='';
+      document.getElementById('add-ex').value='';
+      document.getElementById('add-apikey').value='';
+      await cfgLoad();
+    }else toast('添加失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+async function cfgDelete(id){
+  const e=(CFG.entries||[]).find(x=>x.id===id);
+  const isCustom=!!(e&&e._custom);
+  const msg = isCustom
+    ? '确认删除该手动添加的模型？删除后不可恢复。'
+    : '确认删除该清单模型？删除后将从列表移除且不再巡检。';
+  if(!confirm(msg))return;
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({deleteModel:id})});
+    const j=await r.json();
+    if(j.ok){
+      toast('已删除');
+      await cfgLoad();
+    }else toast('删除失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+async function cfgSaveInterval(){
+  const v=parseInt(document.getElementById('cfg-interval').value,10);
+  if(!v||v<1||v>1440){ toast('间隔需为 1–1440 分钟'); return; }
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({settings:{probeInterval:v}})});
+    const j=await r.json();
+    if(j.ok) toast(`巡检间隔已设为 ${v} 分钟，并同步到计划任务`);
+    else toast('保存失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+async function cfgSaveTimeout(){
+  const v=parseInt(document.getElementById('cfg-timeout').value,10);
+  if(!v||v<1000||v>300000){ toast('模型超时需为 1000–300000 毫秒'); return; }
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({settings:{timeoutMs:v}})});
+    const j=await r.json();
+    if(j.ok) toast(`模型超时已设为 ${v} 毫秒，下一轮巡检生效`);
+    else toast('保存失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+/* ══════════ 邮件告警（配置页） ══════════ */
+function alertLoad(){
+  const a=(CFG.settings&&CFG.settings.alert)||{};
+  const smtp=a.smtp||{}, auth=smtp.auth||{}, th=a.threshold||{};
+  document.getElementById('alert-enable').checked=!!a.enable;
+  document.getElementById('alert-host').value=smtp.host||'';
+  document.getElementById('alert-port').value=smtp.port||465;
+  document.getElementById('alert-secure').checked=smtp.secure!==false;
+  document.getElementById('alert-user').value=auth.user||'';
+  document.getElementById('alert-pass').value=auth.pass||'';
+  document.getElementById('alert-receivers').value=a.receivers||'';
+  document.getElementById('alert-fail').value=th.failTimes||3;
+  document.getElementById('alert-recover').value=th.recoverTimes||3;
+  document.getElementById('alert-hint').textContent='';
+}
+
+function alertCollect(){
+  return {
+    enable: document.getElementById('alert-enable').checked,
+    smtp: {
+      host: document.getElementById('alert-host').value.trim(),
+      port: parseInt(document.getElementById('alert-port').value,10)||465,
+      secure: document.getElementById('alert-secure').checked,
+      auth: {
+        user: document.getElementById('alert-user').value.trim(),
+        pass: document.getElementById('alert-pass').value,
+      },
+    },
+    receivers: document.getElementById('alert-receivers').value.trim(),
+    threshold: {
+      failTimes: parseInt(document.getElementById('alert-fail').value,10)||3,
+      recoverTimes: parseInt(document.getElementById('alert-recover').value,10)||3,
+    },
+  };
+}
+
+async function alertSave(){
+  const alert=alertCollect();
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({settings:{alert}})});
+    const j=await r.json();
+    if(j.ok){ toast('邮件告警配置已保存'); await cfgLoad(); }
+    else toast('保存失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+async function alertTest(){
+  const hint=document.getElementById('alert-hint');
+  const alert=alertCollect();
+  hint.textContent='正在发送测试邮件…';
+  try{
+    const r=await fetch('/api/alert/test',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({alert})});
+    const j=await r.json();
+    if(j.ok){ toast('测试邮件已发送，请查收'); hint.textContent='测试邮件已发送'; }
+    else { toast('发送失败: '+(j.error||'未知错误')); hint.textContent='发送失败: '+(j.error||''); }
+  }catch(e){ toast('请求失败: '+e); hint.textContent='请求失败'; }
+}
+
+/* ══════════ 立即测试（首页） ══════════ */
+let RUNNING_NOW=false;
+let PROBE_POLL=null;
+
+function probeBtnLock(lock, text){
+  const btn=document.getElementById('btn-runnow');
+  const hint=document.getElementById('run-now-hint');
+  RUNNING_NOW=lock;
+  if(btn){ btn.disabled=lock; btn.style.opacity=lock?0.6:''; }
+  if(text && hint) hint.textContent=text;
+}
+
+// 轮询 /api/probe/status，直到 running=false（巡检结束）
+function waitProbeDone(){
+  return new Promise((resolve)=>{
+    let waited=0;
+    if(PROBE_POLL){ clearInterval(PROBE_POLL); PROBE_POLL=null; }
+    PROBE_POLL=setInterval(async ()=>{
+      waited+=1500;
+      // 兜底：最长等 5 分钟，避免异常卡死按钮
+      if(waited>300000){ clearInterval(PROBE_POLL); PROBE_POLL=null; return resolve({timeout:true}); }
+      try{
+        const s=await (await fetch('/api/probe/status',{cache:'no-store'})).json();
+        if(!s.running){ clearInterval(PROBE_POLL); PROBE_POLL=null; return resolve({timeout:false}); }
+      }catch(e){ /* 网络抖动，继续等 */ }
+    },1500);
+  });
+}
+
+async function runNow(){
+  if(RUNNING_NOW){ toast('巡检进行中，请等待完成'); return; }
+  probeBtnLock(true,'正在检查巡检状态…');
+  try{
+    const r=await fetch('/api/probe',{method:'POST'});
+    const j=await r.json();
+    if(!j.ok){ toast('触发失败: '+(j.error||'未知错误')); probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。'); return; }
+
+    if(j.started){
+      toast('已启动一轮巡检（计入今日巡检次数）');
+      probeBtnLock(true,'巡检进行中，按钮已锁定，完成后自动解锁…');
+    }else{
+      toast('已有巡检正在运行，等待其完成，不重复启动');
+      probeBtnLock(true,'已有巡检进行中，等待完成，不重复启动…');
+    }
+
+    const res=await waitProbeDone();
+    probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。');
+    if(res.timeout) toast('等待超时，已解锁按钮，请稍后查看结果');
+    else toast('巡检已完成，结果已刷新');
+    tickHome(); tickFoot();
+  }catch(e){
+    toast('请求失败: '+e);
+    probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。');
+  }
+}
+
+/* ══════════ API Key 管理（配置页） ══════════ */
+let KEYS=null;
+const KEY_SHEETS=['电信机房部署','电信新环境','裸机部署','移动机房部署'];
+
+function keyVal(sheet){
+  if(!KEYS||!KEYS.keys)return '';
+  const v=KEYS.keys[sheet];
+  if(typeof v==='string')return v;
+  if(v&&v.headers){ const h=v.headers['authorization']||v.headers['X-Api-Key']||''; return h.replace(/^Bearer\s+/i,''); }
+  return '';
+}
+function keySummary(sheet){
+  const v=KEYS&&KEYS.keys?KEYS.keys[sheet]:null;
+  if(!v)return '<span class="stale">未配置</span>';
+  if(typeof v==='string')return '已配置';
+  if(v.headers)return '自定义header';
+  return '';
+}
+async function keysReload(){
+  try{ KEYS=await (await fetch('/api/keys',{cache:'no-store'})).json(); }
+  catch(e){ document.getElementById('keys-editor').innerHTML=`<div class="empty">读取失败: ${esc(e)}</div>`; return; }
+  const customN=KEYS&&KEYS.customKeys?Object.keys(KEYS.customKeys).length:0;
+  const box=document.getElementById('keys-editor');
+  box.innerHTML=KEY_SHEETS.map(s=>`
+    <div class="fg"><label>${esc(s)} — ${keySummary(s)}</label>
+      <input class="key-in" data-sheet="${esc(s)}" placeholder="sk-xxx（留空清除）" value="${esc(keyVal(s))}" style="width:300px" type="password">
+    </div>`).join('')
+    + (customN?`<div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><div class="hint" style="margin:0">另有 ${customN} 个手动模型设置了独立 API Key（在模型编辑里管理）</div></div>`:'');
+}
+async function keysSave(){
+  const keys={};
+  document.querySelectorAll('.key-in').forEach(inp=>{ keys[inp.dataset.sheet]=inp.value.trim(); });
+  try{
+    const r=await fetch('/api/keys',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({keys})});
+    const j=await r.json();
+    if(j.ok){ toast('API Key 已保存'); keysReload(); }
+    else toast('保存失败: '+(j.error||'未知错误'));
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+/* ══════════ 模型编辑（配置页） ══════════ */
+let EDITING=null;
+let ED_UPLOADED=''; // 当前编辑模型已上传的文件（media/...）
+
+function edToggleReqType(){
+  const v=document.getElementById('ed-reqtype').value;
+  document.getElementById('ed-multipart').style.display = (v==='multipart')?'block':'none';
+}
+
+async function edUpload(input){
+  const f=input.files && input.files[0];
+  if(!f) return;
+  const hint=document.getElementById('ed-filehint');
+  hint.textContent='上传中…';
+  const fd=new FormData();
+  fd.append('file', f);
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd});
+    const j=await r.json();
+    if(j.ok){ ED_UPLOADED=j.path; hint.textContent='已上传: '+j.path; toast('文件已上传'); }
+    else { hint.textContent='上传失败: '+(j.error||'未知错误'); toast('上传失败: '+(j.error||'未知错误')); }
+  }catch(e){ hint.textContent='上传失败: '+e; toast('上传失败: '+e); }
+}
+
+function editOpen(id){
+  const e=(CFG.entries||[]).find(x=>x.id===id);
+  if(!e){ toast('未找到该模型'); return; }
+  EDITING=e;
+  const kindLabel = e._custom ? '手动添加的模型' : (e._edited ? '清单模型（已编辑，覆盖写入 overrides.json）' : '清单模型（编辑将写入 overrides.json，不改 catalog.json）');
+  document.getElementById('edit-id-hint').textContent=`${kindLabel} · ${id}` + (e.apiKey?' · 已设置独立 API Key':'');
+  document.getElementById('ed-service').value=e.service||e.name||'';
+  document.getElementById('ed-name').value=e.name||'';
+  document.getElementById('ed-url').value=e.url||'';
+  document.getElementById('ed-kind').value=e.kind||'custom';
+  document.getElementById('ed-ex').value=e.requestExample||'';
+  document.getElementById('ed-apikey').value=e.apiKey||'';
+  document.getElementById('ed-inc').checked=e.effectiveInclude!==false;
+
+  const rt=e.requestType||'json';
+  document.getElementById('ed-reqtype').value=rt;
+  const mp=e.multipart||{};
+  document.getElementById('ed-filefield').value=mp.fileField||'file';
+  document.getElementById('ed-filepath').value=mp.filePath||'';
+  ED_UPLOADED=mp.uploadedFile||'';
+  document.getElementById('ed-filehint').textContent = ED_UPLOADED ? ('已上传: '+ED_UPLOADED) : (mp.filePath ? ('使用路径: '+mp.filePath) : '');
+  document.getElementById('ed-file').value='';
+  edToggleReqType();
+
+  document.getElementById('modal').classList.add('show');
+}
+function editClose(){ document.getElementById('modal').classList.remove('show'); EDITING=null; ED_UPLOADED=''; }
+async function editSave(){
+  if(!EDITING)return;
+  const service=document.getElementById('ed-service').value.trim();
+  const name=document.getElementById('ed-name').value.trim();
+  const url=document.getElementById('ed-url').value.trim();
+  if(!name||!url){ toast('模型名称和 URL 为必填'); return; }
+  if(!/^https?:\/\//i.test(url)){ toast('URL 需以 http:// 或 https:// 开头'); return; }
+  const kind=document.getElementById('ed-kind').value;
+  const requestExample=document.getElementById('ed-ex').value.trim();
+  const apiKey=document.getElementById('ed-apikey').value.trim();
+  const inc=document.getElementById('ed-inc').checked;
+
+  const requestType=document.getElementById('ed-reqtype').value;
+  let multipart=null;
+  if(requestType==='multipart'){
+    const fileField=document.getElementById('ed-filefield').value.trim()||'file';
+    const filePath=document.getElementById('ed-filepath').value.trim();
+    if(!ED_UPLOADED && !filePath){ toast('表单上传类型需要先上传文件或填写文件路径'); return; }
+    multipart={ fileField, uploadedFile: ED_UPLOADED||undefined, filePath: filePath||undefined };
+  }
+
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({updateModel:{id:EDITING.id,service,name,url,kind,requestExample,apiKey,requestType,multipart}})});
+    const j=await r.json();
+    if(!j.ok){ toast('保存失败: '+(j.error||'未知错误')); return; }
+    // 同步覆盖项：相对清单默认的纳入/排除；清单模型 id 不变，自定义模型可能改 id
+    const ov={...(CFG.overrides||{})};
+    const newId=j.id||EDITING.id;
+    if(CFG.overrides?.[EDITING.id]) ov[newId]=CFG.overrides[EDITING.id];
+    delete ov[EDITING.id];
+    const defaultInc=EDITING.defaultInclude!==false;
+    if(inc!==defaultInc) ov[newId]=inc?'include':'exclude'; else delete ov[newId];
+    await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({overrides:ov})});
+    editClose();
+    toast('已保存: '+name);
+    await cfgLoad();
+  }catch(e){ toast('请求失败: '+e); }
+}
+
+/* ══════════ 页脚信息 + 初始化 ══════════ */
+async function tickFoot(){
+  try{
+    const s=await (await fetch('/api/status',{cache:'no-store'})).json();
+    if(s&&s.generatedAt){
+      const age=Math.floor((Date.now()-Date.parse(s.generatedAt))/60000);
+      document.getElementById('foot-gen').textContent='状态更新: '+fmtAge(age);
+    }else{
+      document.getElementById('foot-gen').textContent='尚无数据';
+    }
+  }catch(e){ /* ignore */ }
+}
+
+tickHome(); tickDetail(); tickFoot();
+setInterval(()=>{tickHome();tickDetail();tickFoot();},5000);
+</script>
+</body>
+</html>

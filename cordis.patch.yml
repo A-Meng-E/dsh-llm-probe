@@ -5,15 +5,15 @@
 # browser half (sidebar entry + native toolbar panel).
 #
 # 可覆盖的配置（均带默认值，全部可省略）：
-#   toolDir:   巡检工具所在目录（须含 server.mjs / probe.mjs）。
-#              留空时自动探测：环境变量 LLM_PROBE_DIR → 本插件包的上一级目录。
-#              把本插件放在巡检工具目录内（<toolDir>/dsh-llm-probe）时留空即可。
+#   dataDir:   数据目录（catalog / keys / overrides / out / media）。
+#              留空时用 $DSH_HOME/llm-probe，再否则 ~/.dsh/llm-probe。
+#              引擎脚本随插件分发（engine/），不需要用户自备 probe.mjs。
 #   port:      巡检服务端口，默认 8787
-#   autoStart: Host 半部是否在首次需要时拉起 server.mjs，默认 true
+#   autoStart: Host 半部是否在首次需要时拉起内嵌引擎，默认 true
 - insert:
     - id: llm-probe
       name: 'dsh-llm-probe'
       config:
-        toolDir: ''
+        dataDir: ''
         port: 8787
         autoStart: true

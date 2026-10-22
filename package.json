@@ -1,9 +1,8 @@
 {
   "name": "dsh-llm-probe",
-  "version": "1.0.0",
-  "private": true,
+  "version": "1.1.0",
   "type": "module",
-  "description": "在 DSH 侧边栏提供「巡检看板」：托管大模型接口可用性巡检服务、同源反代看板、暴露 llmProbe 服务与 llm_probe_* agent 工具。",
+  "description": "开箱即用的大模型接口可用性巡检：内置巡检引擎，侧边栏「巡检看板」+ 原生工具条 + 状态角标，并给 agent 提供 llm_probe_* 工具。",
   "icon": "icon.svg",
   "main": "lib/index.js",
   "exports": {
@@ -16,6 +15,13 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "engine/server.mjs",
+    "engine/probe.mjs",
+    "engine/dashboard.html",
+    "engine/mailer.mjs",
+    "engine/alert.mjs",
+    "engine/catalog.template.json",
+    "engine/keys.template.json",
     "cordis.patch.yml",
     "icon.svg",
     "locale/*.json",
