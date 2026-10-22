@@ -26,6 +26,19 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 
 想换成自己的模型清单：看板「模型」页支持新增/编辑/导入，也可以直接改数据目录里的 `catalog.json`。
 
+### 音频类模型（multipart）要准备素材
+
+有些模型（比如 `qwen2-audio-7b-instruct`）的探测方式不是纯文本，而是 **multipart 上传一段音频**。这类条目在模型页里要配两样东西：
+
+1. `requestType: multipart` + `fileField`（服务端要求的字段名，常见是 `file`）；
+2. `uploadedFile`：在模型页点「上传音频」选文件，看板会把它存进 `<数据目录>/media/`，并写回一个相对路径（形如 `media/1750000000000-test.wav`）。
+
+`probe.mjs` 解析这个相对路径时以**数据目录**为根（`PROBE_DATA_DIR`），所以音频文件和配置永远待在一起：
+
+- 迁移到新机器：把 `media/` 一起带走，路径不用改；
+- 想换一段音频：重新上传即可，旧文件留在 `media/` 里可以手动删；
+- 报错 `音频文件不存在: media/xxx.wav`：说明 `media/` 里没有这个文件（上传失败、或只复制了 json 没复制 `media/`）。
+
 装完你会得到：
 
 | 位置 | 内容 |
@@ -172,7 +185,10 @@ const SKIN_PROFILES = {
 数据目录里 `keys.json` 的子表都是空的。点「打开 Web UI」→「密钥」页填一个，或直接编辑 `keys.json`（键名要和 `catalog.json` 里的 `sheet` 对上）。填完角标会在 30 秒内自己变过来。
 
 **换了台机器，怎么把巡检数据带过去**
-复制整个数据目录（默认 `~/.dsh/llm-probe/`，含 `catalog.json` / `keys.json` / `overrides.json` / `out/`）到新机器的同一位置，再装插件即可。或者设 `LLM_PROBE_DATA` 指向你放数据的地方。
+复制整个数据目录（默认 `~/.dsh/llm-probe/`，含 `catalog.json` / `keys.json` / `overrides.json` / `out/` / `media/`）到新机器的同一位置，再装插件即可。或者设 `LLM_PROBE_DATA` 指向你放数据的地方。**`media/` 一定要一起复制**——音频类模型的条目里存的是 `media/xxx.wav` 这种相对路径，少这个目录那些模型会报「音频文件不存在」。
+
+**音频类模型报「音频文件不存在: media/xxx.wav」**
+看板「模型」页重新上传一次音频（会落到 `<数据目录>/media/`），或把文件手工放进 `media/` 并保证文件名和条目里配的一致。
 
 **iframe 里看板是空白/数据不动**
 先直接访问 `http://127.0.0.1:8787` 确认看板本身正常；再看 `/plugins/llm-probe/health`。若只有面板里空白，多半是反代没生效（host 半改动需要「禁用 → 启用」插件才生效）。
