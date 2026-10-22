@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "title": "巡检看板",
+    "description": "把本地的大模型接口可用性巡检工具搬进侧边栏：全幅看板、原生工具条、状态角标，并让 agent 直接查询与触发巡检。"
+  },
+  "panel": {
+    "title": "巡检看板",
+    "openWebUI": "打开 Web UI",
+    "runNow": "立即巡检",
+    "retry": "重试",
+    "copy": "复制地址",
+    "copied": "已复制",
+    "loading": "正在连巡检服务…",
+    "offline": "巡检服务未启动，点击重试",
+    "offlineTitle": "巡检服务未连接",
+    "offlineHint": "插件会托管 server.mjs。可点击下面的按钮重试，或检查端口是否被占用。",
+    "errorTitle": "面板加载失败",
+    "badgeFail": "{n} 个模型不可用",
+    "badgeRunning": "巡检进行中",
+    "badgeStale": "数据已过期（最后更新 {n} 分钟前）",
+    "badgeOffline": "巡检服务未连接",
+    "badgeOk": "全部可用",
+    "hover": "不可用 {fail} / 共 {total} · 最近巡检 {ago}",
+    "justNow": "刚刚",
+    "minutesAgo": "{n} 分钟前",
+    "hoursAgo": "{n} 小时前",
+    "appearance": "外观",
+    "modeAuto": "跟随皮肤",
+    "modeDsn": "只跟亮暗",
+    "modeClassic": "经典样式",
+    "opened": "已打开系统浏览器",
+    "openFailed": "打开失败"
+  }
+}

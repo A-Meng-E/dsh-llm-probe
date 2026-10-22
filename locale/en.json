@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "title": "Probe Board",
+    "description": "Brings the local LLM endpoint availability probe into the sidebar: full-width board, native toolbar, status badge, and agent tools."
+  },
+  "panel": {
+    "title": "Probe Board",
+    "openWebUI": "Open Web UI",
+    "runNow": "Probe now",
+    "retry": "Retry",
+    "copy": "Copy address",
+    "copied": "Copied",
+    "loading": "Connecting to the probe service…",
+    "offline": "Probe service is not running, click to retry",
+    "offlineTitle": "Probe service not connected",
+    "offlineHint": "The plugin supervises server.mjs. Retry below, or check whether the port is taken.",
+    "errorTitle": "Panel failed to load",
+    "badgeFail": "{n} models unavailable",
+    "badgeRunning": "Probe running",
+    "badgeStale": "Data is stale (last update {n} min ago)",
+    "badgeOffline": "Probe service not connected",
+    "badgeOk": "All available",
+    "hover": "{fail} unavailable / {total} total · last probe {ago}",
+    "justNow": "just now",
+    "minutesAgo": "{n} min ago",
+    "hoursAgo": "{n} h ago",
+    "appearance": "Appearance",
+    "modeAuto": "Follow skin",
+    "modeDsn": "Light/dark only",
+    "modeClassic": "Classic",
+    "opened": "Opened in system browser",
+    "openFailed": "Failed to open"
+  }
+}

@@ -1,0 +1,24 @@
+# 依赖与构建产物
+node_modules/
+pnpm-lock.yaml
+
+# 本地运行产物（巡检数据绝不入库）
+out/
+*.log
+probe.state.json
+status.json
+rounds.jsonl
+probes.jsonl
+
+# 本机配置：包含密钥，任何人都不该提交
+keys.json
+keys.example.json.local
+overrides.local.json
+.env
+.env.*
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

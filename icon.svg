@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" role="img" aria-label="巡检看板">
+  <title>巡检看板</title>
+  <rect x="2.75" y="3.75" width="18.5" height="16.5" rx="4.25" stroke="currentColor" stroke-width="1.85"/>
+  <path d="M5.4 14.6h2.1l1.5-4.3 2.05 7 1.95-9.1 1.8 6.4h3.8" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="18.1" cy="8.1" r="1.9" fill="currentColor"/>
+</svg>
