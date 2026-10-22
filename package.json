@@ -23,6 +23,7 @@
     "engine/catalog.template.json",
     "engine/keys.template.json",
     "engine/package.json",
+    "engine/media/sample-audio.wav",
     "cordis.patch.yml",
     "icon.svg",
     "locale/*.json",

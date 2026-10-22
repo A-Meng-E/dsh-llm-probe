@@ -33,6 +33,8 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 1. `requestType: multipart` + `fileField`（服务端要求的字段名，常见是 `file`）；
 2. `uploadedFile`：在模型页点「上传音频」选文件，看板会把它存进 `<数据目录>/media/`，并写回一个相对路径（形如 `media/1750000000000-test.wav`）。
 
+仓库自带一段 8KB 样例音频（`engine/media/sample-audio.wav`），首次启动会被铺到 `<数据目录>/media/sample-audio.wav`，可以直接拿它去配条目、当场试一次，不用先自己录。铺种子只补缺失文件，不会覆盖你已有的素材。
+
 `probe.mjs` 解析这个相对路径时以**数据目录**为根（`PROBE_DATA_DIR`），所以音频文件和配置永远待在一起：
 
 - 迁移到新机器：把 `media/` 一起带走，路径不用改；
