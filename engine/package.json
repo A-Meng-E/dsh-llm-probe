@@ -1,0 +1,7 @@
+{
+  "name": "llm-probe-engine",
+  "version": "1.1.0",
+  "private": true,
+  "description": "dsh-llm-probe 内置的巡检引擎（由「大模型可用性巡检」上游同步，仅两处补丁：server.mjs 支持 --data、probe.mjs 认 PROBE_DATA_DIR）",
+  "type": "module"
+}
