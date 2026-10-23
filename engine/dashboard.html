@@ -8,19 +8,21 @@
 :root{
   /* ── 令牌桥 ─────────────────────────────────────────────────────────────
      插件在 iframe 内把 DSH 主题令牌映射成下面这组 --p-*；
-     独立浏览器打开时用右侧默认值，外观与旧版完全一致（回归要求）。       */
-  --p-bg-base:#0b1120;      --p-bg-card:#111827;   --p-bg-card2:#0f172a;
-  --p-border:#1f2937;       --p-border-strong:#1e3a8a;
-  --p-fg:#d1d5db;           --p-fg-muted:#6b7280;  --p-on-accent:#fff;
-  --p-accent:#3b82f6;       --p-accent-2:#8b5cf6;  --p-danger-fill:#dc2626;
+     这里给的是**浅色**默认值（插件默认外观 = 浅色）。
+     想回到旧的深色独立页面：给 <html> 加 data-theme="dark"，或直接改下面这组值。 */
+  --p-bg-base:#f6f7f9;      --p-bg-card:#ffffff;   --p-bg-card2:#eef1f5;
+  --p-border:#e2e6ec;       --p-border-strong:#c9d0da;
+  --p-fg:#1b1f27;           --p-fg-muted:#5b6472;  --p-on-accent:#fff;
+  --p-accent:#2f6fe4;       --p-accent-2:#7b61ff;  --p-danger-fill:#dc2626;
   --p-font-family:"Segoe UI",system-ui,sans-serif;  --p-font-size:13px;
-  --p-hover:rgba(255,255,255,.04); --p-hover-strong:rgba(255,255,255,.025);
-  --p-mask:rgba(3,7,18,.6);        --p-shadow:rgba(0,0,0,.4);
+  --p-hover:rgba(17,24,39,.05); --p-hover-strong:rgba(17,24,39,.035);
+  --p-mask:rgba(15,23,42,.35);      --p-shadow:rgba(15,23,42,.18);
   --p-radius:8px;           --p-card-filter:none;
 
   /* ── 旧变量名（保持不变，只改为引用 --p-*） ── */
   --bg:var(--p-bg-base); --panel:var(--p-bg-card); --panel2:var(--p-bg-card2); --line:var(--p-border);
-  --txt:var(--p-fg); --dim:var(--p-fg-muted); --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --txt:var(--p-fg); --dim:var(--p-fg-muted);
+  --ok:#0f7b4f; --bad:#c0392b; --warn:#8a5a00;
   --primary:var(--p-accent); --accent:var(--p-accent-2); --chat:var(--p-accent);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -379,7 +381,8 @@ async function tickHome(){
      <div class="card">
        <div class="label">清单更新</div>
        <div class="val num">${catAge!=null?catAge:'?'}<span style="font-size:13px;color:var(--dim);font-weight:400"> 天前</span></div>
-       <div class="sub">${catAge!=null&&catAge>7?'<span class="stale">超过 7 天，建议重新导入</span>':'清单较新'}</div>
+       <div class="sub">${catAge!=null&&catAge>7?'<span class="stale">超过 7 天，建议复核清单</span>':(st.catalogUpdatedFrom==='models'?'模型配置已更新':(st.catalogUpdatedFrom==='import'?'Excel 清单已导入':'清单较新'))}</div>
+       <div class="sub" style="font-size:11px;color:var(--dim)">${st.catalogUpdatedAt?new Date(st.catalogUpdatedAt).toLocaleDateString('zh-CN'):''}</div>
      </div>`;
 
   // 不可用模型

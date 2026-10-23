@@ -53,11 +53,39 @@ async function loadOverridesDoc() {
   const doc = await readJSON(OVERRIDES);
   return {
     updatedAt: doc?.updatedAt ?? null,
+    modelUpdatedAt: doc?.modelUpdatedAt ?? null,
     overrides: (doc && typeof doc.overrides === 'object' && doc.overrides) || {},
     customModels: Array.isArray(doc?.customModels) ? doc.customModels : [],
     entryEdits: (doc && typeof doc.entryEdits === 'object' && doc.entryEdits) || {},
     removedModels: Array.isArray(doc?.removedModels) ? doc.removedModels : [],
     settings: (doc && typeof doc.settings === 'object' && doc.settings) || {},
+  };
+}
+
+/** 标记「模型配置」被改过：清单新鲜度按这个时间算，而不是只认 Excel 导入时间。 */
+function stampModelConfig(doc) {
+  doc.modelUpdatedAt = new Date().toISOString();
+  return doc;
+}
+
+/**
+ * 清单「最后更新」= max(catalog.generatedAt, overrides.modelUpdatedAt)。
+ * 只要模型配置（纳入/排除、增删改、自定义模型）变动过，就算清单更新过。
+ */
+function catalogFreshness(catalog, ov) {
+  const candidates = [];
+  if (catalog?.generatedAt) candidates.push({ at: catalog.generatedAt, from: 'import' });
+  if (ov?.modelUpdatedAt) candidates.push({ at: ov.modelUpdatedAt, from: 'models' });
+  const valid = candidates
+    .map((c) => ({ at: c.at, from: c.from, t: Date.parse(c.at) }))
+    .filter((c) => Number.isFinite(c.t));
+  if (!valid.length) return { at: null, from: null, ageDays: null };
+  valid.sort((a, b) => b.t - a.t);
+  const newest = valid[0];
+  return {
+    at: newest.at,
+    from: newest.from,
+    ageDays: Math.max(0, Math.floor((Date.now() - newest.t) / 86400000)),
   };
 }
 
@@ -223,8 +251,10 @@ const server = http.createServer(async (req, res) => {
 
       const catalog = await readJSON(CATALOG);
       const ov = await loadOverridesDoc();
-      const catAge = catalog?.generatedAt
-        ? Math.floor((Date.now() - Date.parse(catalog.generatedAt)) / 86400000) : null;
+      const fresh = catalogFreshness(catalog, ov);
+      const catAge = fresh.ageDays;
+      const catalogUpdatedAt = fresh.at;
+      const catalogUpdatedFrom = fresh.from;
       const roundAgeMin = status?.generatedAt
         ? Math.max(0, Math.floor((Date.now() - Date.parse(status.generatedAt)) / 60000)) : null;
       // 纳入数必须与真正参与巡检的条数一致：套用 overrides（纳入/排除）、removedModels 与 entryEdits
@@ -248,6 +278,8 @@ const server = http.createServer(async (req, res) => {
         unavailable: entries.filter((e) => !e.ok),
         summary: status?.summary ?? {},
         catalogAge: catAge,
+        catalogUpdatedAt,
+        catalogUpdatedFrom,
         totalEntries,
       });
     }
@@ -429,6 +461,7 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(data.removedModels)) {
           ov.removedModels = data.removedModels.filter((x) => typeof x === 'string');
         }
+        stampModelConfig(ov);
         await saveOverridesDoc(ov);
         return json(200, { ok: true, count: Object.keys(clean).length, updatedAt: ov.updatedAt });
       }
@@ -458,6 +491,7 @@ const server = http.createServer(async (req, res) => {
           multipart: m.multipart || null,
         };
         ov.customModels = ov.customModels.concat(entry);
+        stampModelConfig(ov);
         await saveOverridesDoc(ov);
         return json(200, { ok: true, id, count: ov.customModels.length });
       }
@@ -497,6 +531,7 @@ const server = http.createServer(async (req, res) => {
             next.id = newId;
           }
           ov.customModels[idx] = next;
+          stampModelConfig(ov);
           await saveOverridesDoc(ov);
           return json(200, { ok: true, id: next.id, from: 'custom' });
         }
@@ -514,6 +549,7 @@ const server = http.createServer(async (req, res) => {
           requestType: u.requestType || undefined,
           multipart: u.multipart === undefined ? undefined : u.multipart,
         }};
+        stampModelConfig(ov);
         await saveOverridesDoc(ov);
         return json(200, { ok: true, id: u.id, from: 'catalog' });
       }
@@ -527,6 +563,7 @@ const server = http.createServer(async (req, res) => {
           // 自定义模型：真删除
           if (ov.overrides) delete ov.overrides[did];
           if (ov.entryEdits) delete ov.entryEdits[did];
+          stampModelConfig(ov);
           await saveOverridesDoc(ov);
           return json(200, { ok: true, removed: 1, type: 'custom' });
         }
@@ -535,6 +572,7 @@ const server = http.createServer(async (req, res) => {
         if (!ov.removedModels.includes(did)) ov.removedModels.push(did);
         if (ov.overrides) delete ov.overrides[did];
         if (ov.entryEdits) delete ov.entryEdits[did];
+        stampModelConfig(ov);
         await saveOverridesDoc(ov);
         return json(200, { ok: true, removed: 1, type: 'catalog' });
       }
