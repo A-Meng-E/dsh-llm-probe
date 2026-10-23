@@ -22,7 +22,7 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 
 1. 点工具条右侧的「打开 Web UI」（或直接点面板里的看板）→ 切到「密钥」页；
 2. 在任意子表填一个能用的 Key（模板已带 `DeepSeek 官方`，`https://api.deepseek.com`）；
-3. 回到看板点「立即巡检」，第一轮跑完角标和首页就有数据了。
+3. 看板顶部点「⚡ 立即测试」触发第一轮；跑完角标和首页就有数据了。
 
 想换成自己的模型清单：看板「模型」页支持新增/编辑/导入，也可以直接改数据目录里的 `catalog.json`。
 
@@ -96,7 +96,7 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 - 已有一轮在跑（`out/probe.state.json` 里 pid 存活）时跳过；
 - 上一轮数据已经过期（比如 DSH 关了 12 小时再打开），启动约 20 秒后立刻补跑一轮，不用手点；
 - 巡检间隔读 `overrides.json` 的 `settings.probeInterval`（看板「设置」页改的就是它，默认 10 分钟）；
-- 想彻底关掉自动巡检：`config.schedule: off`，之后只在面板上点「立即巡检」。
+- 想彻底关掉自动巡检：`config.schedule: off`，之后只在看板里点「⚡ 立即测试」。
 
 > 代价是 **DSH 得开着**。插件随 DSH 退出而卸载，定时器也随之消失——如果你需要「DSH 关了也照跑」，才用下面的计划任务方案。
 
@@ -191,17 +191,16 @@ const SKIN_PROFILES = {
 
 所以某个第三方皮肤把文字和底色做成一个颜色时，工具条会自己退回深色或浅色基线而不会糊掉。要给它更贴皮肤的颜色，就改 `CHROME_FALLBACK` 里对应的一条（或者让 `sampleChrome()` 采样新令牌）。
 
-面板工具条上的「外观」按钮在三档间循环，并持久化到 `overrides.json` 的 `appearance.mode`：
+面板工具条上的「外观」按钮在两种模式间循环，并持久化到 `overrides.json` 的 `appearance.mode`：
 
 | 模式 | 行为 |
 | --- | --- |
-| `light`（默认） | 固定浅色：看板与工具条都用内置浅色基线，不跟宿主亮暗/皮肤走 |
-| `auto` | 令牌 + 皮肤画像全量跟随，透明画布透出宿主背景 |
-| `classic` | 不注入任何变量，完全是看板本来的样子（看板自带样式现在也是浅色） |
+| `auto`（默认） | 令牌 + 皮肤画像全量跟随，透明画布透出宿主背景 |
+| `classic` | 不注入任何变量，完全是看板本来的样子（看板自带样式是浅色） |
 
-> `dsn`（只跟亮暗、不套皮肤画像）是早期版本的过渡模式，仍可被识别和写入，但按钮循环里已移除；需要它就用 `POST /plugins/llm-probe/appearance {"mode":"dsn"}` 直接设。
+> 早期版本还有 `light`（固定浅色）与 `dsn`（只跟亮暗）两种模式：仍能被识别和写入（`POST /plugins/llm-probe/appearance {"mode":"light"}`），但按钮循环里已移除。
 >
-> 浅色基线写在 `lib/client.js` 的 `LIGHT_PALETTE`（iframe 内）与 `CHROME_FALLBACK.light`（工具条）；`engine/dashboard.html` 的 `:root` 默认值也换成了同一套浅色，所以独立打开 8787 时看到的是浅色页面。
+> 看板自带样式（`classic` 与独立打开 8787）是浅色，`:root` 默认值在 `engine/dashboard.html`；工具条配色的浅色基线在 `lib/client.js` 的 `CHROME_FALLBACK.light`。
 
 ## 5.1 清单「最后更新」怎么算
 
