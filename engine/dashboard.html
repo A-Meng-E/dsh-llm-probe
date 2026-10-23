@@ -126,7 +126,7 @@ input[type=checkbox]{transform:scale(1.15);cursor:pointer;accent-color:var(--pri
   <div class="page active" id="pg-home">
     <div class="topbar">
       <button class="btn" id="btn-runnow" onclick="runNow()">⚡ 立即测试</button>
-      <span class="hint" id="run-now-hint">手动触发一轮巡检，不影响计划任务。</span>
+      <span class="hint" id="run-now-hint">手动触发一轮巡检，不影响自动巡检节奏。</span>
     </div>
 
     <h2>机房概览 · 本轮可用情况</h2>
@@ -205,7 +205,7 @@ input[type=checkbox]{transform:scale(1.15);cursor:pointer;accent-color:var(--pri
       <div class="form-row">
         <div class="fg"><label>巡检间隔（分钟）</label><input id="cfg-interval" type="number" min="1" max="1440" value="10" style="width:90px"></div>
         <button class="btn" onclick="cfgSaveInterval()">保存间隔</button>
-        <span class="hint" id="interval-hint">默认 10 分钟。保存后会自动同步到 Windows 计划任务「DSH模型巡检」。</span>
+        <span class="hint" id="interval-hint">默认 10 分钟。自动巡检由插件定时器驱动（DSH 运行期间生效）。</span>
       </div>
       <div class="form-row" style="margin-bottom:0">
         <div class="fg"><label>模型超时时间（毫秒）</label><input id="cfg-timeout" type="number" min="1000" max="300000" step="1000" value="15000" style="width:120px"></div>
@@ -587,7 +587,7 @@ async function cfgSaveInterval(){
     const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({settings:{probeInterval:v}})});
     const j=await r.json();
-    if(j.ok) toast(`巡检间隔已设为 ${v} 分钟，并同步到计划任务`);
+    if(j.ok) toast(`巡检间隔已设为 ${v} 分钟` + (j.synced ? '，并已同步到计划任务' : ''));
     else toast('保存失败: '+(j.error||'未知错误'));
   }catch(e){ toast('请求失败: '+e); }
 }
@@ -699,7 +699,7 @@ async function runNow(){
   try{
     const r=await fetch('/api/probe',{method:'POST'});
     const j=await r.json();
-    if(!j.ok){ toast('触发失败: '+(j.error||'未知错误')); probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。'); return; }
+    if(!j.ok){ toast('触发失败: '+(j.error||'未知错误')); probeBtnLock(false,'手动触发一轮巡检，不影响自动巡检节奏。'); return; }
 
     if(j.started){
       toast('已启动一轮巡检（计入今日巡检次数）');
@@ -710,13 +710,13 @@ async function runNow(){
     }
 
     const res=await waitProbeDone();
-    probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。');
+    probeBtnLock(false,'手动触发一轮巡检，不影响自动巡检节奏。');
     if(res.timeout) toast('等待超时，已解锁按钮，请稍后查看结果');
     else toast('巡检已完成，结果已刷新');
     tickHome(); tickFoot();
   }catch(e){
     toast('请求失败: '+e);
-    probeBtnLock(false,'手动触发一轮巡检，不影响计划任务。');
+    probeBtnLock(false,'手动触发一轮巡检，不影响自动巡检节奏。');
   }
 }
 

@@ -582,7 +582,10 @@ const server = http.createServer(async (req, res) => {
         await saveOverridesDoc(ov);
         const interval = Number(ov.settings.probeInterval);
         let synced = false;
-        if (Number.isFinite(interval) && interval >= 1 && interval <= 1440) {
+        // 定时巡检默认由插件内的调度器负责（README「定时巡检」）；只有显式开启
+        // PROBE_MANAGE_TASK=1 时这个进程才去创建 Windows 计划任务。
+        const manageTask = process.env.PROBE_MANAGE_TASK === '1';
+        if (manageTask && Number.isFinite(interval) && interval >= 1 && interval <= 1440) {
           try {
             // /Change 不支持 /MO：改间隔必须用 /Create /F 重建任务
             execSync(

@@ -81,18 +81,54 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
         dataDir: ''      # 数据目录；留空时按上面三级解析
         port: 8787       # 内置引擎的端口
         autoStart: true  # 没有健康实例时是否自动拉起
+        schedule: auto   # auto=DSH 运行期间自动定期巡检；off=只手动
 ```
 
 > 端口被别的程序占用时，`autoStart` 也拉不起来：面板会显示「巡检服务未连接」并提供重试。改 `port` 后记得同步 `config.port`。
 >
 > 想沿用旧的一套巡检数据：把旧目录里的 `catalog.json` / `keys.json` / `overrides.json` 和 `out/`、`media/` 复制进数据目录即可（本插件 1.1.0 就是这么迁移的）。
 
-## 2. 开发迭代
+## 2. 定时巡检（自动跑）
+
+**不需要 Windows 计划任务。** 插件 Host 半部自带调度器：
+
+- 启用后每 **60 秒**评估一次「距上一轮巡检是否已过一个 `probeInterval`」，到点才真正触发，不会早跑也不会重复跑；
+- 已有一轮在跑（`out/probe.state.json` 里 pid 存活）时跳过；
+- 上一轮数据已经过期（比如 DSH 关了 12 小时再打开），启动约 20 秒后立刻补跑一轮，不用手点；
+- 巡检间隔读 `overrides.json` 的 `settings.probeInterval`（看板「设置」页改的就是它，默认 10 分钟）；
+- 想彻底关掉自动巡检：`config.schedule: off`，之后只在面板上点「立即巡检」。
+
+> 代价是 **DSH 得开着**。插件随 DSH 退出而卸载，定时器也随之消失——如果你需要「DSH 关了也照跑」，才用下面的计划任务方案。
+
+自查与手动触发（同源接口）：
+
+```powershell
+# 看下一轮什么时候到（含历史计划任务是否存在）
+curl http://127.0.0.1:<GUI端口>/plugins/llm-probe/schedule
+# 立刻评估一次（正常返回 not_due / started）
+curl -X POST -H "Content-Type: application/json" -d '{\"action\":\"tick\"}' http://127.0.0.1:<GUI端口>/plugins/llm-probe/schedule
+```
+
+### 可选：用 Windows 计划任务（DSH 关闭时也巡检）
+
+引擎仍保留这条路径，但默认关闭，避免「装了插件又多出一个重复任务」：
+
+1. 设置环境变量 `PROBE_MANAGE_TASK=1`（给 DSH 进程），重新启用插件；
+2. 看板「设置」页保存一次巡检间隔——此时引擎才执行 `schtasks /Create /TN DSH-Probe`；
+3. 启动器由插件生成在数据目录 `run-probe-hidden.vbs`（路径已指向数据目录，不依赖工具目录）。
+
+装过旧版「大模型可用性巡检」工具的机器上可能残留一个 `DSH-Probe` 任务，且它指向不存在的 vbs（`lastResult: 1`，静默失败）。插件启动时会在日志里提示，一条命令删掉：
+
+```powershell
+curl -X POST -H "Content-Type: application/json" -d '{\"action\":\"remove-task\"}' http://127.0.0.1:<GUI端口>/plugins/llm-probe/schedule
+```
+
+## 3. 开发迭代
 
 - **client 半（`lib/client.js`）**：改完保存即可，DSH 的客户端 bundle 走 HMR，Web 端会重载该插件；若没变化，刷新页面。
 - **host 半（`lib/index.js`）**：不会被 HMR 接管，需要「禁用 → 启用」该插件（插件管理器里操作，或让 agent 调 `plugin_manager set_plugin`）让 fiber 重新执行 `apply()`。
 - 语法自检：`node --check lib/index.js; node --check lib/client.js`。
-- **引擎副本**：`engine/` 下是从「大模型可用性巡检」上游同步来的副本，只打了两处补丁——`server.mjs` 支持 `--data <dir>`（数据目录外置）、`probe.mjs` 的 `resolveMediaPath()` 认 `PROBE_DATA_DIR`。上游脚本改了之后，用新版本覆盖 `engine/` 里的同名文件，再把这两个补丁重打一遍即可（补丁位置：`server.mjs` 顶部 `DATA` 常量与 `OUTDIR/CATALOG/OVERRIDES/KEYS` 默认值、`runProbeNow()` 的 argv、`listen` 前的 `mkdir`；`probe.mjs` 的 `resolveMediaPath`）。
+- **引擎副本**：`engine/` 下是从「大模型可用性巡检」上游同步来的副本，打了三处补丁——`server.mjs` 支持 `--data <dir>`（数据目录外置）、`server.mjs` 的计划任务同步加了 `PROBE_MANAGE_TASK=1` 开关（定时改由插件调度）、`probe.mjs` 的 `resolveMediaPath()` 认 `PROBE_DATA_DIR`；`dashboard.html` 里关于「同步到计划任务」的文案也同步改了。上游脚本改了之后，用新版本覆盖 `engine/` 里的同名文件，再把这几处补丁重打一遍即可（补丁位置：`server.mjs` 顶部 `DATA` 常量与 `OUTDIR/CATALOG/OVERRIDES/KEYS` 默认值、`runProbeNow()` 的 argv、`listen` 前的 `mkdir`、`/api/config` 的 `manageTask`；`probe.mjs` 的 `resolveMediaPath`）。
 - 调试接口（同源，浏览器里直接开）：
 
 ```
@@ -100,13 +136,14 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 /plugins/llm-probe/stats         透传引擎的 /api/stats（角标与看板首页同一份）
 /plugins/llm-probe/health        健康检查（503 = 上游不可达）
 /plugins/llm-probe/appearance    外观跟随模式（GET / POST {mode})
+/plugins/llm-probe/schedule     定时巡检状态（GET）；POST {action:"tick"} 立刻评估一次；POST {action:"remove-task"} 删历史任务
 /plugins/llm-probe/dashboard/    看板本体（iframe 用）
 ```
 
 - 反代会把 HTML 里的 `/api/`、`/media/` 改写到前缀下（`/plugins/llm-probe/dashboard/api/...`），**不要在 `dashboard.html` 里写死插件前缀**，它必须保持能独立打开。
 - Host 日志：`ctx.logger`，前缀 `[llm-probe]`（启动、spawn、健康等待、白名单拒绝都会记）。
 
-## 3. 卸载
+## 4. 卸载
 
 插件管理器移除 `dsh-llm-probe`（或 `plugin_manager remove_bundle`）。卸载时：
 
@@ -116,7 +153,7 @@ git clone https://github.com/<you>/dsh-llm-probe.git "<任意目录>\dsh-llm-pro
 
 数据目录（`~/.dsh/llm-probe/`：`catalog.json`、`keys.json`、`overrides.json`、`out/`、`media/`）**不会**被删除——卸载只是拿掉插件，你的模型清单和巡检历史还在，重装后自动接着用。要彻底清空就手动删这个目录。
 
-## 4. 新增皮肤画像
+## 5. 新增皮肤画像
 
 客户端把「皮肤适配」分四层，加一个新皮肤只需要动第 3 层：
 
@@ -162,7 +199,7 @@ const SKIN_PROFILES = {
 | `dsn` | 只跟亮/暗，用看板自带的暗色/亮色外观，不套皮肤画像 |
 | `classic` | 不注入任何变量，完全是看板本来的样子 |
 
-## 5. 工具清单与权限说明
+## 6. 工具清单与权限说明
 
 | 工具 | 副作用 | 权限 | 何时用 |
 | --- | --- | --- | --- |
@@ -178,7 +215,7 @@ const SKIN_PROFILES = {
 - 工具结果**不返回** `history` 数组（每轮一条，太长），只给趋势统计（近 30 轮延迟 min/avg/max、TPS 均值）。
 - 「打开 Web UI」走 host 白名单：只允许 `http://127.0.0.1:<port>` / `http://localhost:<port>`，其它一律 403 `forbidden_url`；本机用系统默认浏览器打开，不经过插件进程的渲染。
 
-## 6. 常见问题
+## 7. 常见问题
 
 **面板显示「巡检服务未连接」**
 8787 上没有健康实例，且自动拉起失败了。先单独跑 `node "<插件目录>\engine\server.mjs" --port 8787 --data "<数据目录>"` 看报错；端口被占时改 `config.port`。面板上的「重试」会重新探测并再次尝试拉起。
@@ -194,6 +231,12 @@ const SKIN_PROFILES = {
 
 **iframe 里看板是空白/数据不动**
 先直接访问 `http://127.0.0.1:8787` 确认看板本身正常；再看 `/plugins/llm-probe/health`。若只有面板里空白，多半是反代没生效（host 半改动需要「禁用 → 启用」插件才生效）。
+
+**定时巡检不跑／只有手动点了才更新**
+按顺序查：① `/plugins/llm-probe/schedule` 的 `mode` 是不是 `off`（`config.schedule` 关了自动巡检）；② `lastRoundAgeMinutes` 是不是超过 `intervalMinutes`——超过了却还不动，说明 DSH 被关掉过（定时器随 DSH 退出，见第 2 节）；③ `running: true` 卡住不落盘，说明某轮巡检卡在超时，看 `out/probe.log` 尾部；④ `nextDueInMinutes` 正常但数据旧，检查 `overrides.json` 的 `settings.probeInterval` 是不是被设成了很大值。要马上补一轮就 `POST {"action":"tick"}`。
+
+**日志里出现「发现历史计划任务 DSH-Probe」**
+旧版工具或旧配置留下的 Windows 计划任务，它指向的 vbs 可能已经不存在（`lastResult: 1` 静默失败）。插件内定时器已经接管，删掉它即可：`POST /plugins/llm-probe/schedule {"action":"remove-task"}`。
 
 **角标一直不显示**
 `ok` 状态本来就不显示数字（设计如此）。角标只在：不可用（红底数字）、巡检中（脉冲点）、数据过期（灰点）、服务离线（空心点）时出现。鼠标悬停有说明文案。

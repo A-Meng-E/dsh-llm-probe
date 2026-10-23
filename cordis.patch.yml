@@ -10,6 +10,8 @@
 #              引擎脚本随插件分发（engine/），不需要用户自备 probe.mjs。
 #   port:      巡检服务端口，默认 8787
 #   autoStart: Host 半部是否在首次需要时拉起内嵌引擎，默认 true
+#   schedule:  auto（默认）= DSH 运行期间每 probeInterval 分钟自动巡检一轮；
+#              off = 只手动巡检。不依赖 Windows 计划任务。
 - insert:
     - id: llm-probe
       name: 'dsh-llm-probe'
@@ -17,3 +19,4 @@
         dataDir: ''
         port: 8787
         autoStart: true
+        schedule: auto
